@@ -53,7 +53,12 @@ class Noduledetection(DetectionAlgorithm):
         num_classes = 2  # 1 class (nodule) + background
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
         self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-        
+        self.model.transform = torchvision.models.detection.transform.GeneralizedRCNNTransform(
+            min_size=(1024,),
+            max_size=1024,
+            image_mean=[0.0333, 0.0333, 0.0333], 
+            image_std=[0.0153, 0.0153, 0.0153]  
+        )
         if not (train or retest):
             # retrain or test phase
             print('loading the model.pth file :')
@@ -100,45 +105,6 @@ class Noduledetection(DetectionAlgorithm):
     
    
     
-    #--------------------Write your retrain function here ------------
-    def train(self, num_epochs = 1):
-        '''
-        input_dir: Input directory containing all the images to train with
-        output_dir: output_dir to write model to.
-        num_epochs: Number of epochs for training the algorithm.
-        '''
-        # Implementation of the pytorch model and training functions is based on pytorch tutorial: https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html
-
-        # create training dataset and defined transformations
-        self.model.train() 
-        input_dir = self.input_path
-        dataset = CXRNoduleDataset(input_dir, os.path.join(input_dir, 'metadata.csv'), get_transform(train=True))
-        print('training starts ')
-        # define training and validation data loaders
-        data_loader = torch.utils.data.DataLoader(
-            dataset, batch_size=2, shuffle=True, num_workers=4,
-            collate_fn=utils.collate_fn)
-    
-        # construct an optimizer
-        params = [p for p in self.model.parameters() if p.requires_grad]
-        optimizer = torch.optim.SGD(params, lr=0.005,
-                                    momentum=0.9, weight_decay=0.0005)
-        # and a learning rate scheduler
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
-                                                       step_size=3,
-                                                       gamma=0.1)        
-        for epoch in range(num_epochs):
-            train_one_epoch(self.model, optimizer, data_loader, self.device, epoch, print_freq=10)
-            # update the learning rate
-            lr_scheduler.step()
-            print('epoch ', str(epoch),' is running')
-            # evaluate on the test dataset
-            
-            #IMPORTANT: save retrained version frequently.
-            print('saving the model')
-            torch.save(self.model.state_dict(), os.path.join(self.output_path, 'model_retrained.pth'))
-      
-
     def format_to_GC(self, np_prediction, spacing) -> Dict:
         '''
         Convenient function returns detection prediction in required grand-challenge format.

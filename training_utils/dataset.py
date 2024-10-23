@@ -4,17 +4,20 @@ import torch
 from PIL import Image
 import pandas as pd
 import SimpleITK as sitk
-
-import training_utils.transforms as T
-
+from torch.utils.data import Dataset  # Explicitly inherit from PyTorch Dataset
+import transforms as T
+from torchvision import transforms as torch_transforms
 def get_transform(train):
     transforms = []
     transforms.append(T.ToTensor())
     if train:
         transforms.append(T.RandomHorizontalFlip(0.5))
+    # Add the normalization step to the pipeline
     return T.Compose(transforms)
 
-class CXRNoduleDataset(object):
+
+
+class CXRNoduleDataset(Dataset):
     def __init__(self, root, csv_file, transforms):
         self.root = root
         self.transforms = transforms
@@ -23,14 +26,21 @@ class CXRNoduleDataset(object):
         self.imgs = [i for i in self.imgs if i in self.data['img_name'].values]
         # Read only image files in following format
         self.imgs = [i  for i in self.imgs if os.path.splitext(i)[1].lower() in (".mhd", ".mha", ".dcm", ".png", ".jpg", ".jpeg")]   
-
+     
     def __getitem__(self, idx):
+        
         img_path = os.path.join(self.root, "images", str(self.imgs[idx]))
         img = sitk.GetArrayFromImage(sitk.ReadImage(img_path))
-     
-        img = Image.fromarray((np.asarray(img)/np.max(img)))
+
+        img_array = np.asarray(img)
+        img =  (img_array / 65535.0 * 255).astype(np.uint8)
+
+        # Convert to mode "L" for 8-bit grayscale
+        img = Image.fromarray(img)
+        
         nodule_data = self.data[self.data['img_name']==str(self.imgs[idx])]
         num_objs = len(nodule_data)
+
         boxes = []
         
         if nodule_data['label'].any()==1: # nodule data
@@ -49,9 +59,9 @@ class CXRNoduleDataset(object):
         
         # for non-nodule images
         else:
-            boxes = torch.empty([0,4])
-            area = torch.tensor([0])
-            labels = torch.zeros(0, dtype=torch.int64)
+            boxes = torch.empty((0, 4), dtype=torch.float32)
+            area =  torch.tensor([])
+            labels = torch.zeros((0,), dtype=torch.int64)
             iscrowd = torch.zeros((0,), dtype=torch.int64)
 
             
@@ -66,6 +76,7 @@ class CXRNoduleDataset(object):
 
         if self.transforms is not None:
             img, target = self.transforms(img, target)
+            #normalize the image
         
         image_name = str(self.imgs[idx])
 
@@ -73,6 +84,22 @@ class CXRNoduleDataset(object):
 
     def __len__(self):
         return len(self.imgs)
+    def get_labels(self):
+        labels = []
+
+        for img_name in self.imgs:
+            # Get all labels in the CSV file for this image
+            nodule_data = self.data[self.data['img_name'] == img_name]['label'].values
+
+            # If there's any label of 1, classify this image as a nodule (label 1), otherwise non-nodule (label 0)
+            if 1 in nodule_data:
+                labels.append(1)
+            else:
+                labels.append(0)
+
+        return labels
+
+        
     
     
     

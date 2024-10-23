@@ -12,6 +12,15 @@ def _flip_coco_person_keypoints(kps, width):
     inds = flipped_data[..., 2] == 0
     flipped_data[inds] = 0
     return flipped_data
+class Normalize(object):
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, image, target):
+        # Normalize the image using torchvision's functional normalize
+        image = F.normalize(image, mean=self.mean, std=self.std)
+        return image, target
 
 
 class Compose(object):
