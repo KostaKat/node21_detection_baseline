@@ -5,7 +5,7 @@ from PIL import Image
 import pandas as pd
 import SimpleITK as sitk
 from torch.utils.data import Dataset  # Explicitly inherit from PyTorch Dataset
-import transforms as T
+import training_utils.transforms as T
 from torchvision import transforms as torch_transforms
 def get_transform(train):
     transforms = []
